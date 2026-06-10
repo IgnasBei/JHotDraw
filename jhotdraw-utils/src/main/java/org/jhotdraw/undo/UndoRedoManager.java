@@ -221,30 +221,30 @@ public class UndoRedoManager extends UndoManager { //javax.swing.undo.UndoManage
      * and of the RedoAction.
      */
     private void updateActions() {
-        String label;
         if (DEBUG) {
             System.out.println("UndoRedoManager@" + hashCode() + ".updateActions "
                     + editToBeUndone()
                     + " canUndo=" + canUndo() + " canRedo=" + canRedo());
         }
-        if (canUndo()) {
-            undoAction.setEnabled(true);
-            label = getUndoPresentationName();
-        } else {
-            undoAction.setEnabled(false);
-            label = labels.getString("edit.undo.text");
-        }
-        undoAction.putValue(Action.NAME, label);
-        undoAction.putValue(Action.SHORT_DESCRIPTION, label);
-        if (canRedo()) {
-            redoAction.setEnabled(true);
-            label = getRedoPresentationName();
-        } else {
-            redoAction.setEnabled(false);
-            label = labels.getString("edit.redo.text");
-        }
-        redoAction.putValue(Action.NAME, label);
-        redoAction.putValue(Action.SHORT_DESCRIPTION, label);
+        configureMenuAction(undoAction, canUndo(), getUndoPresentationName(), "edit.undo.text");
+        configureMenuAction(redoAction, canRedo(), getRedoPresentationName(), "edit.redo.text");
+    }
+
+    /**
+     * Synchronises the enabled state and the menu label of one of the inner
+     * Swing actions with this manager's state.
+     *
+     * @param action            the menu action to update (undoAction or redoAction)
+     * @param canPerform        whether the corresponding operation is currently possible
+     * @param presentationName  label to show when {@code canPerform} is true
+     * @param fallbackLabelKey  resource bundle key for the label when disabled
+     */
+    private void configureMenuAction(AbstractAction action, boolean canPerform,
+                                     String presentationName, String fallbackLabelKey) {
+        action.setEnabled(canPerform);
+        String label = canPerform ? presentationName : labels.getString(fallbackLabelKey);
+        action.putValue(Action.NAME, label);
+        action.putValue(Action.SHORT_DESCRIPTION, label);
     }
 
     /**
@@ -255,13 +255,7 @@ public class UndoRedoManager extends UndoManager { //javax.swing.undo.UndoManage
     @Override
     public void undo()
             throws CannotUndoException {
-        undoOrRedoInProgress = true;
-        try {
-            super.undo();
-        } finally {
-            undoOrRedoInProgress = false;
-            updateActions();
-        }
+        runGuarded(super::undo);
     }
 
     /**
@@ -272,13 +266,7 @@ public class UndoRedoManager extends UndoManager { //javax.swing.undo.UndoManage
     @Override
     public void redo()
             throws CannotUndoException {
-        undoOrRedoInProgress = true;
-        try {
-            super.redo();
-        } finally {
-            undoOrRedoInProgress = false;
-            updateActions();
-        }
+        runGuarded(super::redo);
     }
 
     /**
@@ -289,9 +277,23 @@ public class UndoRedoManager extends UndoManager { //javax.swing.undo.UndoManage
     @Override
     public void undoOrRedo()
             throws CannotUndoException, CannotRedoException {
+        runGuarded(super::undoOrRedo);
+    }
+
+    /**
+     * Runs an undo/redo operation while {@link #undoOrRedoInProgress} is set,
+     * so that listener fan-out during the operation does not push events back
+     * onto the stack. Always restores the flag and refreshes the menu actions,
+     * even if the operation throws.
+     */
+    private void runGuarded(Runnable operation) {
+        // Invariant: undo/redo is never re-entrant. If this fires the
+        // listener wiring has produced a recursive undo, which the
+        // manager is not designed to handle.
+        assert !undoOrRedoInProgress : "runGuarded must not be called re-entrantly";
         undoOrRedoInProgress = true;
         try {
-            super.undoOrRedo();
+            operation.run();
         } finally {
             undoOrRedoInProgress = false;
             updateActions();

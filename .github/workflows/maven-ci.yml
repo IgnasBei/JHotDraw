@@ -1,0 +1,75 @@
+# JHotDraw CI — Maven build + tests on pull requests.
+#
+# References used while authoring this file:
+#   * Building and testing Java with Maven (GitHub Docs)
+#       https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
+#   * Working with the Apache Maven registry (GitHub Docs)
+#       https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry
+#
+# Why a custom Maven settings file:
+#   The root pom.xml declares
+#       <repository><id>github</id>
+#                   <url>https://maven.pkg.github.com/sweat-tek/MavenRepository</url>
+#       </repository>
+#   which requires GitHub Packages authentication even for a read-only resolve.
+#   The .maven-settings.xml in the project root maps the "github" server id to
+#   ${env.GITHUB_ACTOR} / ${env.GITHUB_TOKEN} — both injected automatically by
+#   GitHub Actions — so no personal access token is committed.
+
+name: Build and Test (Maven)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    name: Build, test, package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Show toolchain
+        run: |
+          java -version
+          mvn -v
+
+      - name: Build (compile + package, skip tests for first phase)
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn -B -ntp -s .maven-settings.xml -DskipTests=true install
+
+      - name: Run tests (Surefire)
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn -B -ntp -s .maven-settings.xml test
+
+      - name: Upload Surefire reports on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/**'
+          if-no-files-found: ignore
