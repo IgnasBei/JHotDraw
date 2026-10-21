@@ -38,6 +38,17 @@
 	</properties>
 	<description>This is a fork of jhotdraw from http://sourceforge.net/projects/jhotdraw</description>
 	<build>
+		<pluginManagement>
+			<plugins>
+				<!-- Pinned: without a version each Maven release picks its own
+				     default, and Surefire 3.6.0+ rejects TestNG 6.8.21. -->
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.2.5</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
