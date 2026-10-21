@@ -132,6 +132,17 @@ public class DrawView extends AbstractView {
         getActionMap().put(RedoAction.ID, undo.getRedoAction());
     }
 
+    /**
+     * The application replaces this view's action map after construction
+     * (AbstractApplication.createView), which drops the undo/redo actions
+     * put there by the constructor. Register them again here.
+     */
+    @Override
+    public void init() {
+        super.init();
+        initActions();
+    }
+
     @Override
     protected void setHasUnsavedChanges(boolean newValue) {
         super.setHasUnsavedChanges(newValue);
